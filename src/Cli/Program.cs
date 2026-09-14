@@ -1,4 +1,5 @@
 ﻿using Core;
+
 EnvironmentReport report = EnvironmentInfo.Collect();
 
 Console.WriteLine("CrossApp – практикум з крос-платформного програмування");
@@ -11,5 +12,6 @@ Console.WriteLine($"Версія .NET (CLR)   : {report.ClrVersion}");
 Console.WriteLine($"Runtime             : {report.FrameworkDescription}");
 Console.WriteLine($"Каталог застосунку  : {report.BaseDirectory}");
 Console.WriteLine($"Поточний каталог    : {report.CurrentDirectory}");
+Console.WriteLine($"Примітка збірки     : {report.BuildNote}");
 Console.WriteLine(new string('-', 52));
 Console.WriteLine("Предметна область: Бібліотека (видання, примірник, читач, видача)");
