@@ -1,8 +1,9 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/Cli/Cli.csproj"/>
+    <Project Path="src/Cli/Cli.csproj" />
+    <Project Path="src/Core/Core.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
-    <File Path="README.md"/>
+    <File Path="README.md" />
   </Folder>
 </Solution>

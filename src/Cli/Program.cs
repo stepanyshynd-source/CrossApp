@@ -1,13 +1,15 @@
-﻿using System.Runtime.InteropServices;
+﻿using Core;
+EnvironmentReport report = EnvironmentInfo.Collect();
+
 Console.WriteLine("CrossApp – практикум з крос-платформного програмування");
 Console.WriteLine("Студент: Степанишин Данило, група ФЕІ-31");
 Console.WriteLine(new string('-', 52));
-Console.WriteLine($"ОС (OSDescription) : {RuntimeInformation.OSDescription}");
-Console.WriteLine($"ОС (Environment) : {Environment.OSVersion}");
-Console.WriteLine($"Архітектура процесу : {RuntimeInformation.ProcessArchitecture}");
-Console.WriteLine($"Версія .NET (CLR) : {Environment.Version}");
-Console.WriteLine($"Runtime : {RuntimeInformation.FrameworkDescription}");
-Console.WriteLine($"Каталог застосунку : {AppContext.BaseDirectory}");
-Console.WriteLine($"Поточний каталог : {Environment.CurrentDirectory}");
+Console.WriteLine($"ОС (OSDescription)  : {report.OsDescription}");
+Console.WriteLine($"ОС (Environment)    : {report.OsVersion}");
+Console.WriteLine($"Архітектура процесу : {report.ProcessArchitecture}");
+Console.WriteLine($"Версія .NET (CLR)   : {report.ClrVersion}");
+Console.WriteLine($"Runtime             : {report.FrameworkDescription}");
+Console.WriteLine($"Каталог застосунку  : {report.BaseDirectory}");
+Console.WriteLine($"Поточний каталог    : {report.CurrentDirectory}");
 Console.WriteLine(new string('-', 52));
 Console.WriteLine("Предметна область: Бібліотека (видання, примірник, читач, видача)");
