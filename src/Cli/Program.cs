@@ -28,22 +28,30 @@ if (!File.Exists(path))
     return 1;
 }
 
-ImportResult<BookDto> result = BookCsvImporter.Load(path);
+string ext = Path.GetExtension(path).ToLowerInvariant();
+ImportResult<IEntityDto> result = ext switch
+{
+    ".json" => BookJsonImporter.Load(path),
+    _ => BookCsvImporter.Load(path)
+};
 
 Console.WriteLine($"Завантажено записів: {result.Items.Count}");
 
-foreach (BookDto b in result.Items.Take(5))
+foreach (IEntityDto item in result.Items) // Збільшив Take до 8, щоб влізли читачі
 {
-    Console.WriteLine($" {b.Id,-6} {b.Isbn,-15} {b.Title,-26} {b.Year,4} {b.Author}");
-}
-
-if (result.Errors.Count > 0)
-{
-    Console.WriteLine($"Пропущено рядків: {result.Errors.Count}");
-    foreach (string e in result.Errors)
+    switch (item)
     {
-        Console.WriteLine($" ! {e}");
+        case BookDto b:
+            Console.WriteLine($" [Книга] {b.Id,-6} {b.Isbn,-15} {b.Title,-26} {b.Year,4} {b.Author}");
+            break;
+        case ReaderDto r:
+            Console.WriteLine($" [Читач] {r.Id,-6} {r.FullName,-25} {r.Phone}");
+            break;
     }
 }
+
+int total = result.Items.Count + result.Errors.Count;
+double percent = total > 0 ? Math.Round((double)result.Errors.Count / total * 100, 1) : 0;
+Console.WriteLine($"\n[Статистика] Усього: {total} | Прийнято: {result.Items.Count} | Пропущено: {result.Errors.Count} ({percent}% помилок)");
 
 return 0;
