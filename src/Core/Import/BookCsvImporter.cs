@@ -6,8 +6,6 @@ using Core.Dto;
 public static class BookCsvImporter
 {
     private const char Separator = ';';
-
-    // Змінили BookDto на IEntityDto
     public static ImportResult<IEntityDto> Load(string path)
     {
         var items = new List<IEntityDto>();
@@ -43,7 +41,6 @@ public static class BookCsvImporter
         {
             { Length: < 3 } => new ParseFailed($"очікую мінімум 3 колонки, отримав {parts.Length}"),
 
-            // ПАТЕРНИ ДЛЯ КНИГИ (ідентифікатор починається на B)
             [var id, var isbn, var title, ..] when id.StartsWith("B", StringComparison.OrdinalIgnoreCase) && (isbn == "" || title == "")
                 => new ParseFailed("ISBN або назва порожні"),
 
@@ -56,7 +53,6 @@ public static class BookCsvImporter
             [var id, var isbn, var title, var year, var author] when id.StartsWith("B", StringComparison.OrdinalIgnoreCase)
                 => new ParseOk(new BookDto(id, isbn, title, int.Parse(year, CultureInfo.InvariantCulture), author)),
 
-            // ПАТЕРНИ ДЛЯ ЧИТАЧА (ідентифікатор починається на R)
             [var id, var name, var phone] when id.StartsWith("R", StringComparison.OrdinalIgnoreCase)
                 => new ParseOk(new ReaderDto(id, name, phone)),
 
