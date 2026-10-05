@@ -41,7 +41,7 @@ public static class BookCsvImporter
         {
             { Length: < 3 } => new ParseFailed($"очікую мінімум 3 колонки, отримав {parts.Length}"),
 
-            [var id, var isbn, var title, ..] when id.StartsWith("B", StringComparison.OrdinalIgnoreCase) && (isbn == "" || title == "")
+            [var id, var isbn, var title, ..] when id.StartsWith("B", StringComparison.OrdinalIgnoreCase) && (isbn == " " || title == " ")
                 => new ParseFailed("ISBN або назва порожні"),
 
             [var id, _, _, var year, ..] when id.StartsWith("B", StringComparison.OrdinalIgnoreCase) && (!int.TryParse(year, out int y) || y < 1450 || y > DateTime.Now.Year)

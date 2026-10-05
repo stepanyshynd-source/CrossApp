@@ -13,8 +13,6 @@ public static class BookJsonImporter
             string json = File.ReadAllText(path);
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             var books = JsonSerializer.Deserialize<List<BookDto>>(json, options) ?? [];
-
-            // Перетворюємо список BookDto на список IEntityDto
             var items = books.Cast<IEntityDto>().ToList();
             return new ImportResult<IEntityDto>(items, errors);
         }

@@ -1,57 +1,43 @@
-﻿using Core;
-using Core.Dto;
-using Core.Import;
+﻿using System;
+using Core.Domain;
 
-//1-2 лаби
-EnvironmentReport report = EnvironmentInfo.Collect();
+Console.WriteLine("=== Сценарій 1: успіх ===");
 
-Console.WriteLine("CrossApp – практикум з крос-платформного програмування");
-Console.WriteLine("Студент: Степанишин Данило, група ФЕІ-31");
-Console.WriteLine(new string('-', 52));
-Console.WriteLine($"ОС (OSDescription)  : {report.OsDescription}");
-Console.WriteLine($"ОС (Environment)    : {report.OsVersion}");
-Console.WriteLine($"Архітектура процесу : {report.ProcessArchitecture}");
-Console.WriteLine($"Версія .NET (CLR)   : {report.ClrVersion}");
-Console.WriteLine($"Runtime             : {report.FrameworkDescription}");
-Console.WriteLine($"Каталог застосунку  : {report.BaseDirectory}");
-Console.WriteLine($"Поточний каталог    : {report.CurrentDirectory}");
-Console.WriteLine($"Примітка збірки     : {report.BuildNote}");
-Console.WriteLine(new string('-', 52));
-Console.WriteLine("Предметна область: Бібліотека (видання, примірник, читач, видача)");
+BookCopy copy = BookCopy.Create("B-001", "978-0451524935");
+Console.WriteLine(copy);
 
-//3 лаба
-string path = args.Length > 0 ? args[0] : Path.Combine("data", "sample.csv");
+DateTime issueDate = new DateTime(2026, 10, 1);
+Loan loan = Loan.Open("L-100", copy, "R-001", issueDate);
+Console.WriteLine(loan);
+Console.WriteLine($"Статус книги після видачі: {copy}");
 
-if (!File.Exists(path))
+DateTime returnDate = new DateTime(2026, 10, 5);
+loan.Close(returnDate, copy);
+Console.WriteLine(loan);
+Console.WriteLine($"Статус книги після повернення: {copy}");
+
+
+Console.WriteLine("\n=== Сценарій 2: порушення інваріантів ===");
+
+TryDo("порожній ISBN", () => BookCopy.Create("B-002", "  "));
+
+BookCopy copy2 = BookCopy.Create("B-003", "978-1234567890");
+Loan loan2 = Loan.Open("L-101", copy2, "R-002", issueDate);
+
+TryDo("видача вже виданого примірника", () => Loan.Open("L-102", copy2, "R-003", issueDate));
+
+TryDo("повернення в минулому", () => loan2.Close(new DateTime(2026, 9, 20), copy2));
+
+
+static void TryDo(string title, Action action)
 {
-    Console.WriteLine($"Файл не знайдено: {Path.GetFullPath(path)}");
-    return 1;
-}
-
-string ext = Path.GetExtension(path).ToLowerInvariant();
-ImportResult<IEntityDto> result = ext switch
-{
-    ".json" => BookJsonImporter.Load(path),
-    _ => BookCsvImporter.Load(path)
-};
-
-Console.WriteLine($"Завантажено записів: {result.Items.Count}");
-
-foreach (IEntityDto item in result.Items) // Збільшив Take до 8, щоб влізли читачі
-{
-    switch (item)
+    try
     {
-        case BookDto b:
-            Console.WriteLine($" [Книга] {b.Id,-6} {b.Isbn,-15} {b.Title,-26} {b.Year,4} {b.Author}");
-            break;
-        case ReaderDto r:
-            Console.WriteLine($" [Читач] {r.Id,-6} {r.FullName,-25} {r.Phone}");
-            break;
+        action();
+        Console.WriteLine($" [Х] {title}: виняток НЕ спрацював — інваріант відсутній!");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"{title}: {ex.GetType().Name} - {ex.Message}");
     }
 }
-
-int total = result.Items.Count + result.Errors.Count;
-double percent = total > 0 ? Math.Round((double)result.Errors.Count / total * 100, 1) : 0;
-Console.WriteLine($"\n[Статистика] Усього: {total} | Прийнято: {result.Items.Count} | Пропущено: {result.Errors.Count} ({percent}% помилок)");
-
-return 0;
