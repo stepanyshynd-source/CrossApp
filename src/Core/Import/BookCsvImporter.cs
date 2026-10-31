@@ -6,7 +6,7 @@ using Core.Dto;
 public static class BookCsvImporter
 {
     private const char Separator = ';';
-    public static ImportResult<IEntityDto> Load(string path)
+    public static ImportResult<IEntityDto> Load(string path, Action<string>? onSkippedLine = null)
     {
         var items = new List<IEntityDto>();
         var errors = new List<string>();
@@ -17,8 +17,23 @@ public static class BookCsvImporter
             int number = i + 1;
             string line = lines[i];
 
-            if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#') || (number == 1 && line.StartsWith("id", StringComparison.OrdinalIgnoreCase)))
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                onSkippedLine?.Invoke($"Рядок {number}: порожній рядок пропущено");
                 continue;
+            }
+
+            if (line.StartsWith('#'))
+            {
+                onSkippedLine?.Invoke($"Рядок {number}: коментар пропущено ('{line}')");
+                continue;
+            }
+
+            if (number == 1 && line.StartsWith("id", StringComparison.OrdinalIgnoreCase))
+            {
+                onSkippedLine?.Invoke($"Рядок {number}: заголовок таблиці пропущено ('{line}')");
+                continue;
+            }
 
             switch (ParseLine(line))
             {
@@ -26,7 +41,9 @@ public static class BookCsvImporter
                     items.Add(ok.Value);
                     break;
                 case ParseFailed failed:
-                    errors.Add($"рядок {number}: {failed.Reason}");
+                    string err = $"рядок {number}: {failed.Reason}";
+                    errors.Add(err);
+                    onSkippedLine?.Invoke($"Рядок {number} відхилено: {failed.Reason}");
                     break;
             }
         }

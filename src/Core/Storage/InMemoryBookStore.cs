@@ -26,4 +26,7 @@ public sealed class InMemoryBookStore(IEnumerable<BookCopy>? seed = null) : IBoo
     public void Update(BookCopy item) => _items[item.Id] = item;
 
     public bool Remove(string id) => _items.Remove(id);
+
+    public IEnumerable<BookCopy> Find(Func<BookCopy, bool> predicate) =>
+        _items.Values.Where(predicate);
 }

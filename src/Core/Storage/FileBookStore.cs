@@ -45,8 +45,7 @@ public sealed class FileBookStore(string path) : IBookStore
     {
         ArgumentNullException.ThrowIfNull(item);
         EnsureLoaded();
-        if (_cache.ContainsKey(item.Id))
-            throw new InvalidOperationException($"Запис з id={item.Id} уже існує.");
+        if (_cache.ContainsKey(item.Id)) throw new InvalidOperationException($"Запис з id={item.Id} уже існує.");
         _cache.Add(item.Id, item);
         Flush();
     }
@@ -54,4 +53,10 @@ public sealed class FileBookStore(string path) : IBookStore
     public void Update(BookCopy item) { EnsureLoaded(); _cache[item.Id] = item; Flush(); }
 
     public bool Remove(string id) { EnsureLoaded(); if (!_cache.Remove(id)) return false; Flush(); return true; }
+
+    public IEnumerable<BookCopy> Find(Func<BookCopy, bool> predicate)
+    {
+        EnsureLoaded();
+        return _cache.Values.Where(predicate);
+    }
 }

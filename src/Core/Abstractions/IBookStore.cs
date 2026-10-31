@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Core.Domain;
 
@@ -10,4 +11,5 @@ public interface IBookStore
     void Add(BookCopy item);
     void Update(BookCopy item);
     bool Remove(string id);
+    IEnumerable<BookCopy> Find(Func<BookCopy, bool> predicate);
 }
