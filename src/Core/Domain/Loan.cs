@@ -16,22 +16,29 @@ public sealed class Loan
     public string CopyId { get; }
     public string ReaderId { get; }
     public DateTime IssuedOn { get; }
+    public DateTime DueDate { get; }
     public DateTime? ReturnedOn { get; private set; }
 
     public LoanStatus Status { get; private set; }
 
-    private Loan(string id, string copyId, string readerId, DateTime issuedOn, DateTime? returnedOn = null, LoanStatus status = LoanStatus.Active)
+    private Loan(string id, string copyId, string readerId, DateTime issuedOn, DateTime dueDate, DateTime? returnedOn = null, LoanStatus status = LoanStatus.Active)
     {
         Id = id;
         CopyId = copyId;
         ReaderId = readerId;
         IssuedOn = issuedOn;
+        DueDate = dueDate;
         ReturnedOn = returnedOn;
         Status = status;
     }
 
-    public static Loan Open(string id, BookCopy copy, string readerId, DateTime issuedOn, int readerActiveLoans = 0)
+    public static Loan Open(string id, BookCopy copy, string readerId, DateTime issuedOn, int readerActiveLoans = 0, DateTime? dueDate = null)
     {
+        var due = dueDate ?? issuedOn.AddDays(14);
+
+        if (due < issuedOn)
+            throw new ArgumentOutOfRangeException(nameof(dueDate), due, "Термін повернення не може бути раніше дати видачі");
+
         if (string.IsNullOrWhiteSpace(id))
             throw new ArgumentException("Ідентифікатор видачі обов'язковий", nameof(id));
 
@@ -45,8 +52,10 @@ public sealed class Loan
             throw new InvalidOperationException($"Примірник {copy.Id} вже виданий, повторна видача неможлива");
 
         copy.Issue();
-        return new Loan(id.Trim(), copy.Id, readerId.Trim(), issuedOn);
+        return new Loan(id.Trim(), copy.Id, readerId.Trim(), issuedOn, due);
     }
+
+    public bool IsOverdue(DateTime today) => Status == LoanStatus.Active && DueDate < today;
 
     public void Close(DateTime returnedOn, BookCopy copy)
     {
