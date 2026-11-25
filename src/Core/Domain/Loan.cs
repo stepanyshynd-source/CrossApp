@@ -46,10 +46,10 @@ public sealed class Loan
             throw new ArgumentException("Ідентифікатор читача обов'язковий", nameof(readerId));
 
         if (readerActiveLoans >= 3)
-            throw new InvalidOperationException($"Читач {readerId} вже має 3 відкриті видачі. Ліміт вичерпано.");
+            throw new DomainException($"Читач {readerId} вже має 3 відкриті видачі. Ліміт вичерпано.");
 
         if (copy.IsIssued)
-            throw new InvalidOperationException($"Примірник {copy.Id} вже виданий, повторна видача неможлива");
+            throw new DomainException($"Примірник {copy.Id} вже виданий, повторна видача неможлива");
 
         copy.Issue();
         return new Loan(id.Trim(), copy.Id, readerId.Trim(), issuedOn, due);
@@ -61,8 +61,8 @@ public sealed class Loan
     {
         Status = Status switch
         {
-            LoanStatus.Returned => throw new InvalidOperationException($"Видача {Id} вже закрита"),
-            LoanStatus.Lost => throw new InvalidOperationException($"Видача {Id} позначена як втрачена. Звичайне повернення неможливе"),
+            LoanStatus.Returned => throw new DomainException($"Видача {Id} вже закрита"),
+            LoanStatus.Lost => throw new DomainException($"Видача {Id} позначена як втрачена. Звичайне повернення неможливе"),
             LoanStatus.Active => LoanStatus.Returned,
             _ => throw new InvalidOperationException("Невідомий стан")
         };

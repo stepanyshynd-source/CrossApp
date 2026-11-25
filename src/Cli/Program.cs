@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Cli.Notifications;
 using Core;
 using Core.Abstractions;
@@ -74,11 +77,85 @@ switch (command)
     case "events":
         RunEventsDemo(args);
         break;
+    case "import":
+        await RunImportAsync(args);
+        break;
+    case "import-stream":
+        await RunImportStreamAsync(args);
+        break;
     default:
         Console.WriteLine("report-top | report-books | report-low | report-overdue | report-groups | report-sum | report-demo");
         Console.WriteLine("report-readers | report-query | report-bench | events");
+        Console.WriteLine("import [шлях] [--timeout-ms=N]  (асинхронний імпорт, Ctrl+C скасовує)");
+        Console.WriteLine("import-stream [шлях] [--timeout-ms=N] [--user-timeout-ms=N]  (IAsyncEnumerable + IProgress + зв'язані токени)");
         Console.WriteLine("прапорці: --empty (порожнє джерело), --file (файлове сховище для events)");
         break;
+}
+
+static async Task RunImportAsync(string[] args)
+{
+    var path = args.Where(a => !a.StartsWith("--")).Skip(1).FirstOrDefault() ?? "data/sample.json";
+
+    var service = new LendingService(new InMemoryBookStore());
+    var events = 0;
+    service.Changed += (_, _) => events++;
+
+    using var cts = new CancellationTokenSource();
+    ConsoleCancelEventHandler onCancel = (_, e) => { e.Cancel = true; cts.Cancel(); };
+    Console.CancelKeyPress += onCancel;
+
+    var timeoutArg = args.FirstOrDefault(a => a.StartsWith("--timeout-ms="));
+    if (timeoutArg is not null && int.TryParse(timeoutArg["--timeout-ms=".Length..], out var ms))
+        cts.CancelAfter(TimeSpan.FromMilliseconds(ms));
+
+    try
+    {
+        var added = await service.ImportAsync(new JsonBookImporter(), path, cts.Token);
+        Console.WriteLine($"Імпортовано записів: {added} (подій: {events})");
+    }
+    catch (OperationCanceledException) { Console.WriteLine("Імпорт скасовано."); }
+    catch (DomainException ex) { Console.WriteLine($"Дані відхилено: {ex.Message}"); }
+    catch (FileNotFoundException) { Console.WriteLine($"Файл не знайдено: {path}"); }
+    catch (JsonException ex) { Console.WriteLine($"Некоректний JSON: {ex.Message}"); }
+    finally { Console.CancelKeyPress -= onCancel; }
+}
+
+static async Task RunImportStreamAsync(string[] args)
+{
+    var path = args.Where(a => !a.StartsWith("--")).Skip(1).FirstOrDefault() ?? "data/sample.json";
+
+    var service = new LendingService(new InMemoryBookStore());
+
+    // Токен від Ctrl+C
+    using var userCts = new CancellationTokenSource();
+    ConsoleCancelEventHandler onCancel = (_, e) => { e.Cancel = true; userCts.Cancel(); };
+    Console.CancelKeyPress += onCancel;
+
+    // Таймаут від --user-timeout-ms (якщо задано)
+    using var timeoutCts = new CancellationTokenSource();
+    var timeoutArg = args.FirstOrDefault(a => a.StartsWith("--user-timeout-ms="));
+    if (timeoutArg is not null && int.TryParse(timeoutArg["--user-timeout-ms=".Length..], out var ms))
+        timeoutCts.CancelAfter(TimeSpan.FromMilliseconds(ms));
+
+    // Зв'язаний токен: спрацьовує від будь-якого з двох джерел
+    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(userCts.Token, timeoutCts.Token);
+
+    var progress = new Progress<int>(n => Console.Write($"\r  імпортовано: {n} записів..."));
+
+    try
+    {
+        var added = await service.ImportStreamAsync(new JsonStreamingImporter(), path, progress, linkedCts.Token);
+        Console.WriteLine($"\nІмпортовано записів: {added}");
+    }
+    catch (OperationCanceledException)
+    {
+        var reason = timeoutCts.IsCancellationRequested ? "таймаут" : "Ctrl+C";
+        Console.WriteLine($"\nІмпорт скасовано ({reason}).");
+    }
+    catch (DomainException ex) { Console.WriteLine($"\nДані відхилено: {ex.Message}"); }
+    catch (FileNotFoundException) { Console.WriteLine($"\nФайл не знайдено: {path}"); }
+    catch (JsonException ex) { Console.WriteLine($"\nНекоректний JSON: {ex.Message}"); }
+    finally { Console.CancelKeyPress -= onCancel; }
 }
 
 static void PrintBooks(IReadOnlyList<BookLine> lines)

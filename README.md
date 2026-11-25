@@ -85,3 +85,57 @@ public static IReadOnlyList<GroupSummary> ByGenre(IEnumerable<Book> source) =>
    | `ByGenreQuery` (синтаксис запитів) | 5 | ~11.3 |
 
    Проміжні `ToList` тут майже нічого не змінюють: `OrderBy` — буферизувальний оператор і все одно копіює всю послідовність у пам'ять, а список після `Where` має відомий розмір, тож наступні кроки виділяють буфери точного розміру (різниця в межах ~5 %). Вирішальним є порядок операторів: якщо сортувати до фільтра, `OrderBy` сортує всі 100 000 елементів замість ~15 000, і це в ~8 разів повільніше. Варіант із синтаксисом запитів повільніший через `ToUpperInvariant()` (новий рядок на кожен елемент) і `let`, які компілятор розгортає в додаткові `Select` з анонімними типами.
+
+
+### async/await, скасування, доменні винятки, unit-тести (Лабораторна 8)
+
+#### Нові файли
+| Файл | Призначення |
+|---|---|
+| `src/Core/DomainException.cs` | Власний виняток для бізнес-правил |
+| `src/Core/Abstractions/IBookImporter.cs` | Асинхронний контракт імпорту (`Task<IReadOnlyList<BookCopy>>`) |
+| `src/Core/Abstractions/IAsyncBookImporter.cs` | Потоковий контракт (`IAsyncEnumerable<BookCopy>`) |
+| `src/Core/Import/JsonBookImporter.cs` | Реалізація через `FileStream(useAsync: true)` + `JsonSerializer.DeserializeAsync` |
+| `src/Core/Import/JsonStreamingImporter.cs` | Потокова реалізація з `yield return` та `[EnumeratorCancellation]` |
+| `tests/Core.Tests/` | Проєкт xUnit (посилається лише на `Core`) |
+
+#### Зміни у `LendingService`
+- `ImportAsync(IBookImporter, path, CancellationToken)` — зчитує всі записи, потім додає.
+- `ImportStreamAsync(IAsyncBookImporter, path, IProgress<int>?, CancellationToken)` — `await foreach`, звітує через `IProgress<int>` після кожного доданого запису, ідемпотентний.
+
+#### Класифікація винятків
+- `DomainException` — порушення бізнес-правила (повторна видача, невиданий примірник, зіпсований запис у файлі).
+- `ArgumentException` — некоректний аргумент методу (порожній ISBN, порожній ID).
+- `IOException` / `JsonException` — технічні помилки ФС та серіалізації; проходять наскрізь або загортаються зі збереженням `InnerException`.
+
+#### Тести (`dotnet test` — 14 passed)
+
+| Клас | Тест | Що перевіряє |
+|---|---|---|
+| `CatalogServiceTests` | `IssueCopy_WhenAlreadyIssued_Throws_AndKeepsState` | `DomainException`, стан незмінний, подія не піднялась |
+| `CatalogServiceTests` | `AddBook_RaisesChangedExactlyOnce` | Подія `BookAdded` рівно один раз |
+| `CatalogServiceTests` | `AddBook_WithEmptyIsbn_ThrowsArgumentException_AndStoreStaysEmpty` | `ArgumentException`, сховище порожнє |
+| `CatalogServiceTests` | `ReturnCopy_WhenNotIssued_ThrowsDomainException` | `DomainException` на повернення невиданого |
+| `ImportTests` | `ImportAsync_WhenAlreadyCancelled_Throws` | `OperationCanceledException` при скасованому токені |
+| `ImportTests` | `ImportAsync_AddsNewItems_RaisesEventPerItem_AndIsIdempotent` | 2 записи → 2 події; повторний імпорт → 0 |
+| `ImportTests` | `LoadAsync_WithInvalidRecord_ThrowsDomainException_WithRecordNumber` | `DomainException` «Запис 2», `InnerException` є `ArgumentException`; тимчасовий файл видаляється в `finally` |
+| `ImportTests` | `ImportStreamAsync_AddsNewItems_AndIsIdempotent` | `IAsyncEnumerable`: 2 записи; повторний → 0 |
+| `ImportTests` | `ImportStreamAsync_ReportsProgress` | `IProgress<int>` викликається після кожного доданого |
+| `ImportTests` | `LinkedTokens_TimeoutCancels_BeforeUserToken` | `CreateLinkedTokenSource`; `timeoutCts` спрацював, `userCts` — ні |
+| `ReportServiceTests` | `ScarceBooks_CountsOnlyBelowThreshold` (3×`[Theory]`) | Правильна кількість дефіцитних при різних порогах |
+| `ReportServiceTests` | `TopBooks_IsDeterministic` | Детермінований топ-N |
+
+#### Скасування у CLI
+```bash
+# Звичайний імпорт (Ctrl+C скасовує):
+dotnet run --project src/Cli -- import data/sample.json
+
+# Потоковий імпорт з таймаутом 100 мс і IProgress:
+dotnet run --project src/Cli -- import-stream data/sample.json --user-timeout-ms=100
+```
+Вивід при скасуванні: `Імпорт скасовано (таймаут).` або `Імпорт скасовано (Ctrl+C).`
+
+#### Покриття коду (`dotnet test --collect:"XPlat Code Coverage"`)
+Загальне покриття `Core`: **27 % рядків, 22 % гілок** (net10.0).
+Повністю покриті: `DomainException`, `JsonBookImporter`, `LendingService`, `InMemoryBookStore`, `BookLine`, `EnumerableExtensions`.
+Непокриті: `SampleData`, `ReportService` (звіти на 18 книгах), `BookCsvImporter`, `FileBookStore`, `Loan`, `SampleData` — це компоненти, що використовуються лише через CLI-команди (`events`, `report-*`) і не потребують unit-тестів (їхня логіка перевіряється інтеграційно при запуску).

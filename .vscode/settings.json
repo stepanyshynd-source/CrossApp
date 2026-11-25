@@ -1,1 +1,3 @@
-{}
+{
+    "csharp-dev-tools.build.targetFramework": "net10.0"
+}

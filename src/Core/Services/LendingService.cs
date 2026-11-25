@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Core.Abstractions;
 using Core.Domain;
 using Core.Events;
@@ -31,7 +33,7 @@ public sealed class LendingService(IBookStore store, INotificationSink? sink = n
 
     public void IssueCopy(string id, string readerId = "R-001", DateTime? dueDate = null)
     {
-        var copy = _store.GetById(id) ?? throw new InvalidOperationException($"Немає запису з id={id}.");
+        var copy = _store.GetById(id) ?? throw new DomainException($"Немає запису з id={id}.");
         copy.Issue();
         _store.Update(copy);
         dueDate ??= DateTime.Today.AddDays(14);
@@ -40,10 +42,47 @@ public sealed class LendingService(IBookStore store, INotificationSink? sink = n
 
     public void ReturnCopy(string id)
     {
-        var copy = _store.GetById(id) ?? throw new InvalidOperationException($"Немає запису з id={id}.");
+        var copy = _store.GetById(id) ?? throw new DomainException($"Немає запису з id={id}.");
         copy.Return();
         _store.Update(copy);
         OnChanged(copy, BookChangeKind.CopyReturned);
+    }
+
+    public async Task<int> ImportAsync(IBookImporter importer, string path, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(importer);
+
+        var items = await importer.LoadAsync(path, ct);
+        var added = 0;
+        foreach (var copy in items)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_store.GetById(copy.Id) is not null) continue; // ідемпотентність імпорту
+            _store.Add(copy);
+            OnChanged(copy, BookChangeKind.BookAdded);
+            added++;
+        }
+        return added;
+    }
+
+    public async Task<int> ImportStreamAsync(
+        IAsyncBookImporter importer,
+        string path,
+        IProgress<int>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(importer);
+
+        var added = 0;
+        await foreach (var copy in importer.StreamAsync(path, cancellationToken))
+        {
+            if (_store.GetById(copy.Id) is not null) continue; // ідемпотентність
+            _store.Add(copy);
+            OnChanged(copy, BookChangeKind.BookAdded);
+            added++;
+            progress?.Report(added);
+        }
+        return added;
     }
 
     public IReadOnlyList<BookCopy> All() => _store.List();
